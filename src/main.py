@@ -1,11 +1,8 @@
-import numpy as np
-from PIL import Image
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision.transforms as transforms
 
 from data_loader import DataLoader
+from model import TorchPrototypeNN
+# from utils import Utils
 
 
 class TorchPrototype:
@@ -13,31 +10,35 @@ class TorchPrototype:
     Motivated by PyTorch Training example:
     https://docs.pytorch.org/tutorials/beginner/introyt/trainingyt.html
     '''
-    @staticmethod
-    def train():
-        model = TorchPrototypeNN()
-        loss_fn = torch.nn.CrossEntropyLoss()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
+    def setup(self):
+        self._train_loader = DataLoader.build(is_train=True)
+        self._model = TorchPrototypeNN()
+        self._loss_fn = torch.nn.CrossEntropyLoss()
+        self._optimizer = torch.optim.SGD(self._model.parameters(), lr=0.001)
+
+    def train(self):
+        self._train_epoch()
+
+    def _train_epoch(self):
         # running_loss = 0.
         # last_loss = 0.
-        train_loader = DataLoader.build(is_train=True)
-        for i, data in enumerate(train_loader):
+        for i, data in enumerate(self._train_loader):
             # Every data instance is an input + label pair
             inputs, labels = data
             # print(inputs.shape)
             # print(labels.shape)
             # print(labels)
             # Zero your gradients for every batch!
-            optimizer.zero_grad()
+            self._optimizer.zero_grad()
             # Make predictions for this batch
-            outputs = model(inputs)
+            outputs = self._model(inputs)
             # print(outputs.shape)
             # print(outputs)
             # Compute the loss and its gradients
-            loss = loss_fn(outputs, labels)
+            loss = self._loss_fn(outputs, labels)
             loss.backward()
             # Adjust learning weights
-            optimizer.step()
+            self._optimizer.step()
             # # Gather data and report
             # running_loss += loss.item()
             # if i % 1000 == 999:
@@ -49,39 +50,12 @@ class TorchPrototype:
         print(i)
         print(loss)
 
-    @staticmethod
-    def _show_image(idx):
-        # 60000, 28, 28
-        images = DataLoader.get_images(is_train=True)
-        for row in images[idx]:
-            print(row)
-        Image.fromarray(images[idx]).show()
-        trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (0.5,))])
-        # 28, 60000, 28
-        images = trans(images)
-        image = (images[:, idx, :].T.numpy()*255).astype(np.uint8)
-        for row in image:
-            print(row)
-        Image.fromarray(image).show()
-
-
-class TorchPrototypeNN(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.conv = nn.Conv2d(28, 28, 100)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.linear = nn.Linear(28*28, 10)
-
-    def forward(self, x):
-        # x = self.conv(x)
-        # x = self.pool(x)
-        x = torch.flatten(x, start_dim=1)
-        x = self.linear(x)
-        return x
 
 def main():
     # _debug()
-    TorchPrototype.train()
+    trainer = TorchPrototype()
+    trainer.setup()
+    trainer.train()
 
 
 def _debug():
@@ -91,7 +65,7 @@ def _debug():
     # test_labels = DataLoader.get_labels(is_train=False)
     # print(test_labels.shape)
     # print(test_labels[:5])
-    # TorchPrototype._show_image(1)
+    # Utils._show_image(1)
     train_loader = DataLoader.build(is_train=True)
     print(train_loader.dataset)
     print(train_loader.dataset.tensors)
