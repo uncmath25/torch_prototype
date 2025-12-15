@@ -12,16 +12,41 @@ class TorchPrototype:
     '''
     def setup(self):
         self._train_loader = DataLoader.build(is_train=True)
+        self._val_loader = DataLoader.build(is_train=False)
         self._model = TorchPrototypeNN()
         self._loss_fn = torch.nn.CrossEntropyLoss()
         self._optimizer = torch.optim.SGD(self._model.parameters(), lr=0.001)
 
     def train(self):
-        self._train_epoch()
+        EPOCHS = 2
+        best_vloss = 1_000_000.
+        for epoch in range(EPOCHS):
+            print(f'EPOCH {epoch + 1}:')
+            # Make sure gradient tracking is on, and do a pass over the data
+            self._model.train(True)
+            last_loss = self._train_epoch()
+            running_vloss = 0.0
+            # Set the model to evaluation mode, disabling dropout and using population
+            # statistics for batch normalization.
+            self._model.eval()
+            # Disable gradient computation and reduce memory consumption.
+            with torch.no_grad():
+                for i, vdata in enumerate(self._val_loader):
+                    vinputs, vlabels = vdata
+                    voutputs = self._model(vinputs)
+                    vloss = self._loss_fn(voutputs, vlabels)
+                    running_vloss += vloss
+            last_vloss = float(running_vloss / (i + 1))
+            print(f'LOSS train {round(last_loss, 2)} valid {round(last_vloss, 2)}')
+            # Track best performance, and save the model's state
+            if last_vloss < best_vloss:
+                best_vloss = last_vloss
+                model_name = 'prototype_temp'
+                torch.save(self._model.state_dict(), model_name)
 
     def _train_epoch(self):
-        # running_loss = 0.
-        # last_loss = 0.
+        running_loss = 0.
+        last_loss = 0.
         for i, data in enumerate(self._train_loader):
             # Every data instance is an input + label pair
             inputs, labels = data
@@ -40,19 +65,15 @@ class TorchPrototype:
             # Adjust learning weights
             self._optimizer.step()
             # # Gather data and report
-            # running_loss += loss.item()
-            # if i % 1000 == 999:
-            #     last_loss = running_loss / 1000 # loss per batch
-            #     print('  batch {} loss: {}'.format(i + 1, last_loss))
-            #     tb_x = epoch_index * len(training_loader) + i + 1
-            #     tb_writer.add_scalar('Loss/train', last_loss, tb_x)
-            #     running_loss = 0.
-        print(i)
-        print(loss)
+            running_loss += loss.item()
+            if i % 1000 == 999:
+                last_loss = running_loss / 1000 # loss per batch
+                print(f'batch {i+1} loss: {round(last_loss, 2)}')
+                running_loss = 0.
+        return last_loss
 
 
 def main():
-    # _debug()
     trainer = TorchPrototype()
     trainer.setup()
     trainer.train()
@@ -73,5 +94,22 @@ def _debug():
     print(train_loader.dataset.tensors[1].shape)
 
 
+def _eval():
+    model = TorchPrototypeNN()
+    model.load_state_dict(torch.load('prototype_temp'))
+    model.eval()
+    val_loader = DataLoader.build(is_train=False)
+    idx = 0
+    val_input = val_loader.dataset.tensors[0][idx:(idx + 1)]
+    val_output = val_loader.dataset.tensors[1][idx]
+    pred_output = model(val_input)
+    print(f'actual output: {val_output}')
+    print(f'pred output: {pred_output}')
+    import torch.nn as nn
+    print(f'pred output: {nn.Softmax(dim=1)(pred_output)}')
+
+
 if __name__ == '__main__':
     main()
+    # _debug()
+    # _eval()
