@@ -110,6 +110,6 @@ def _eval():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
     # _debug()
-    # _eval()
+    _eval()
