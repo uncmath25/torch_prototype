@@ -1,3 +1,4 @@
+import os
 import torch
 
 from data_loader import DataLoader
@@ -11,9 +12,14 @@ class TorchPrototype:
     https://docs.pytorch.org/tutorials/beginner/introyt/trainingyt.html
     '''
     def setup(self):
+        self._device = 'cpu'
+        # Disabling for now, not sure why mps is slower than gpu
+        # if torch.accelerator.is_available():
+        #     self._device = torch.accelerator.current_accelerator().type
+        print(f'Using {self._device} device')
         self._train_loader = DataLoader.build(is_train=True)
         self._val_loader = DataLoader.build(is_train=False)
-        self._model = TorchPrototypeNN()
+        self._model = TorchPrototypeNN().to(self._device)
         self._loss_fn = torch.nn.CrossEntropyLoss()
         self._optimizer = torch.optim.SGD(self._model.parameters(), lr=0.001)
 
@@ -31,8 +37,8 @@ class TorchPrototype:
             self._model.eval()
             # Disable gradient computation and reduce memory consumption.
             with torch.no_grad():
-                for i, vdata in enumerate(self._val_loader):
-                    vinputs, vlabels = vdata
+                for i, (vinputs, vlabels) in enumerate(self._val_loader):
+                    vinputs, vlabels = vinputs.to(self._device), vlabels.to(self._device)
                     voutputs = self._model(vinputs)
                     vloss = self._loss_fn(voutputs, vlabels)
                     running_vloss += vloss
@@ -47,9 +53,9 @@ class TorchPrototype:
     def _train_epoch(self):
         running_loss = 0.
         last_loss = 0.
-        for i, data in enumerate(self._train_loader):
+        for i, (inputs, labels) in enumerate(self._train_loader):
             # Every data instance is an input + label pair
-            inputs, labels = data
+            inputs, labels = inputs.to(self._device), labels.to(self._device)
             # print(inputs.shape)
             # print(labels.shape)
             # print(labels)
@@ -110,6 +116,11 @@ def _eval():
 
 
 if __name__ == '__main__':
-    # main()
-    # _debug()
-    _eval()
+    MODE = os.getenv('MODE', 'TRAIN')
+    print(f'Running in {MODE} mode...')
+    if MODE == 'TRAIN':
+        main()
+    elif MODE == 'EVAL':
+        _eval()
+    else:
+        raise Exception(f'Unsupported mode: {MODE}')

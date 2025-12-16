@@ -2,4 +2,4 @@
 set -e
 
 # uv sync
-uv run src/main.py
+MODE=EVAL uv run src/main.py
